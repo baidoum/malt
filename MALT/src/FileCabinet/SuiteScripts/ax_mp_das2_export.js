@@ -52,15 +52,24 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
             const dateTo = scriptObj.getParameter({ name: 'custscript_ax_das2_date_to' });
 
             if (dateFrom && dateTo) {
-                const endOfDay = new Date(dateTo);
-                endOfDay.setHours(23, 59, 59, 999);
+                try {
+                    const endOfDay = new Date(dateTo);
+                    endOfDay.setHours(23, 59, 59, 999);
 
-                savedSearch.filters = savedSearch.filters.filter(f => f.name !== 'closedate');
-                savedSearch.filters.push(search.createFilter({
-                    name: 'closedate',
-                    operator: search.Operator.WITHIN,
-                    values: [dateFrom, endOfDay]
-                }));
+                    savedSearch.filters = savedSearch.filters.filter(f => f.name !== 'closedate');
+                    savedSearch.filters.push(search.createFilter({
+                        name: 'closedate',
+                        operator: search.Operator.WITHIN,
+                        values: [dateFrom, endOfDay]
+                    }));
+                }
+                catch (e) {
+                    log.error({
+                        title: 'Impossible de filtrer la recherche DAS2 par période',
+                        details: `dateFrom=${dateFrom} dateTo=${dateTo} - ${e.name}: ${e.message}\n${e.stack || ''}`
+                    });
+                    throw e;
+                }
             }
 
             return savedSearch;
