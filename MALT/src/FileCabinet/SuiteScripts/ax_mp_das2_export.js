@@ -41,32 +41,53 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
          * @since 2015.2
          */
         const getInputData = (inputContext) => {
+            // Logs de diagnostic temporaires : à retirer une fois le problème de get input data résolu.
+            log.audit({ title: 'DIAG getInputData 0', details: 'Entrée dans getInputData.' });
+
             try {
+                log.audit({ title: 'DIAG getInputData 1', details: 'Avant search.load.' });
                 const savedSearch = search.load({
                     id: 'customsearch_ax_das2'
                 });
+                log.audit({ title: 'DIAG getInputData 2', details: `search.load OK. Nombre de filtres actuels : ${savedSearch.filters.length}, colonnes : ${savedSearch.columns.length}` });
 
                 // Si l'export a été lancé depuis customrecord_das2, restreindre la recherche à la période demandée
                 // en remplaçant le filtre "closedate" par défaut de la recherche sauvegardée.
                 const scriptObj = runtime.getCurrentScript();
+                log.audit({ title: 'DIAG getInputData 3', details: 'runtime.getCurrentScript() OK.' });
+
                 const dateFrom = scriptObj.getParameter({ name: 'custscript_ax_das2_date_from' });
                 const dateTo = scriptObj.getParameter({ name: 'custscript_ax_das2_date_to' });
+                log.audit({ title: 'DIAG getInputData 4', details: `dateFrom=${dateFrom} (type ${typeof dateFrom}), dateTo=${dateTo} (type ${typeof dateTo})` });
 
                 if (dateFrom && dateTo) {
+                    log.audit({ title: 'DIAG getInputData 5', details: 'Filtrage par période demandé.' });
+
                     const endOfDay = new Date(dateTo);
                     endOfDay.setHours(23, 59, 59, 999);
+                    log.audit({ title: 'DIAG getInputData 6', details: `endOfDay=${endOfDay}` });
 
                     // savedSearch.filters retourne une copie à chaque accès : il faut la récupérer une fois,
                     // la modifier, puis la réaffecter pour que le changement soit pris en compte.
                     const filters = savedSearch.filters.filter(f => f.name !== 'closedate');
-                    filters.push(search.createFilter({
+                    log.audit({ title: 'DIAG getInputData 7', details: `Filtre closedate existant retiré. Filtres restants : ${filters.length}` });
+
+                    const newFilter = search.createFilter({
                         name: 'closedate',
                         operator: search.Operator.WITHIN,
                         values: [dateFrom, endOfDay]
-                    }));
+                    });
+                    log.audit({ title: 'DIAG getInputData 8', details: 'search.createFilter OK.' });
+
+                    filters.push(newFilter);
                     savedSearch.filters = filters;
+                    log.audit({ title: 'DIAG getInputData 9', details: `Filtre appliqué. Nombre total de filtres : ${savedSearch.filters.length}` });
+                }
+                else {
+                    log.audit({ title: 'DIAG getInputData 5b', details: 'Pas de dateFrom/dateTo : recherche utilisée sans filtrage par période.' });
                 }
 
+                log.audit({ title: 'DIAG getInputData 10', details: 'Retour de la recherche à NetSuite.' });
                 return savedSearch;
             }
             catch (e) {
