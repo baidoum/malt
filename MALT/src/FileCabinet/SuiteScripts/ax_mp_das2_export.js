@@ -41,16 +41,24 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
          * @since 2015.2
          */
         const getInputData = (inputContext) => {
+            // Logs de diagnostic temporaires : à retirer une fois le problème de get input data résolu.
             try {
                 const savedSearch = search.load({
                     id: 'customsearch_ax_das2'
                 });
+                log.audit({ title: 'DIAG getInputData 1', details: `search.load OK. Filtres actuels : ${describeFilters(savedSearch.filters)}` });
 
                 // Si l'export a été lancé depuis customrecord_das2, restreindre la recherche à la période demandée
                 // en remplaçant le filtre "closedate" par défaut de la recherche sauvegardée.
                 const scriptObj = runtime.getCurrentScript();
-                const dateFrom = parseDateParameter(scriptObj.getParameter({ name: 'custscript_ax_das2_date_from' }));
-                const dateTo = parseDateParameter(scriptObj.getParameter({ name: 'custscript_ax_das2_date_to' }));
+                const rawDateFrom = scriptObj.getParameter({ name: 'custscript_ax_das2_date_from' });
+                const rawDateTo = scriptObj.getParameter({ name: 'custscript_ax_das2_date_to' });
+                const dateFrom = parseDateParameter(rawDateFrom);
+                const dateTo = parseDateParameter(rawDateTo);
+                log.audit({
+                    title: 'DIAG getInputData 2',
+                    details: `raw dateFrom=${rawDateFrom} -> parsed=${dateFrom}; raw dateTo=${rawDateTo} -> parsed=${dateTo}`
+                });
 
                 if (dateFrom && dateTo) {
                     const endOfDay = new Date(dateTo.getTime());
@@ -65,7 +73,14 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
                         values: [dateFrom, endOfDay]
                     }));
                     savedSearch.filters = filters;
+                    log.audit({ title: 'DIAG getInputData 3', details: `Filtre closedate appliqué. Filtres finaux : ${describeFilters(savedSearch.filters)}` });
                 }
+
+                // Exécuter la recherche nous-mêmes avant de la retourner : si elle est mal formée
+                // (filtre invalide, etc.), l'erreur remonte ici plutôt que de faire échouer silencieusement
+                // l'exécution interne du get input data par NetSuite, où nous ne pouvons rien logger.
+                const testRange = savedSearch.run().getRange({ start: 0, end: 1 });
+                log.audit({ title: 'DIAG getInputData 4', details: `Test d'exécution de la recherche OK. ${testRange.length} résultat(s) sur la 1ère page.` });
 
                 return savedSearch;
             }
@@ -76,6 +91,14 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
                 });
                 throw e;
             }
+        }
+
+        /**
+         * @param {import('N/search').Filter[]} filters
+         * @returns {string}
+         */
+        const describeFilters = (filters) => {
+            return filters.map(f => `${f.name} ${f.operator} ${JSON.stringify(f.values)}`).join(' | ');
         }
 
         /**
