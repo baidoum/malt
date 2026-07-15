@@ -41,18 +41,18 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
          * @since 2015.2
          */
         const getInputData = (inputContext) => {
-            const savedSearch = search.load({
-                id: 'customsearch_ax_das2'
-            });
+            try {
+                const savedSearch = search.load({
+                    id: 'customsearch_ax_das2'
+                });
 
-            // Si l'export a été lancé depuis customrecord_das2, restreindre la recherche à la période demandée
-            // en remplaçant le filtre "closedate" par défaut de la recherche sauvegardée.
-            const scriptObj = runtime.getCurrentScript();
-            const dateFrom = scriptObj.getParameter({ name: 'custscript_ax_das2_date_from' });
-            const dateTo = scriptObj.getParameter({ name: 'custscript_ax_das2_date_to' });
+                // Si l'export a été lancé depuis customrecord_das2, restreindre la recherche à la période demandée
+                // en remplaçant le filtre "closedate" par défaut de la recherche sauvegardée.
+                const scriptObj = runtime.getCurrentScript();
+                const dateFrom = scriptObj.getParameter({ name: 'custscript_ax_das2_date_from' });
+                const dateTo = scriptObj.getParameter({ name: 'custscript_ax_das2_date_to' });
 
-            if (dateFrom && dateTo) {
-                try {
+                if (dateFrom && dateTo) {
                     const endOfDay = new Date(dateTo);
                     endOfDay.setHours(23, 59, 59, 999);
 
@@ -63,16 +63,16 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
                         values: [dateFrom, endOfDay]
                     }));
                 }
-                catch (e) {
-                    log.error({
-                        title: 'Impossible de filtrer la recherche DAS2 par période',
-                        details: `dateFrom=${dateFrom} dateTo=${dateTo} - ${e.name}: ${e.message}\n${e.stack || ''}`
-                    });
-                    throw e;
-                }
-            }
 
-            return savedSearch;
+                return savedSearch;
+            }
+            catch (e) {
+                log.error({
+                    title: 'getInputData a échoué',
+                    details: `${e.name}: ${e.message}\n${e.stack || ''}`
+                });
+                throw e;
+            }
         }
 
         /**
