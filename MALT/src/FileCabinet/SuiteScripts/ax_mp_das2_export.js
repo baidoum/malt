@@ -176,7 +176,7 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
             // 1. Récupérer les paramètres du script
             const scriptObj = runtime.getCurrentScript();
             const startUnitsAvailable = scriptObj.getRemainingUsage();
-            const exportFolder = Number(scriptObj.getParameter({ name: 'custscript_ax_export_folder' }));
+            const exportFolder = Number(scriptObj.getParameter({ name: 'custscript_ax_das2_export_folder' }));
             const dasRecordId = scriptObj.getParameter({ name: 'custscript_ax_das2_record_id' });
 
             // 2. Regrouper les lignes par SIRET et récupérer l'année fiscale.
@@ -329,11 +329,12 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
 
             const scriptObj = runtime.getCurrentScript();
             const dasRecordId = scriptObj.getParameter({ name: 'custscript_ax_das2_record_id' });
-            const exportFolder = Number(scriptObj.getParameter({ name: 'custscript_ax_export_folder' }));
+            const exportFolder = Number(scriptObj.getParameter({ name: 'custscript_ax_das2_export_folder' }));
 
             // Regroupe les erreurs de validation écrites par reduce() (clés "ERR::...") pour les transmettre,
             // via un fichier, au script séparé qui les enregistrera dans customrecord_das2_logs.
             const /** @type {string[]} */ validationErrors = [];
+            let filesCreated = 0;
 
             summaryContext.output.iterator().each((key, value) => {
                 const data = JSON.parse(value);
@@ -342,6 +343,8 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
                     validationErrors.push(...data.messages);
                     return true;
                 }
+
+                filesCreated++;
 
                 log.audit({
                     title: `DAS2 ${key}`,
@@ -379,7 +382,9 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
             }
 
             // Erreurs MAP
+            let hasHardErrors = false;
             summaryContext.mapSummary.errors.iterator().each((key, error) => {
+                hasHardErrors = true;
                 log.error({
                     title: `Erreur MAP ${key}`,
                     details: error
@@ -390,6 +395,7 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
 
             // Erreurs REDUCE
             summaryContext.reduceSummary.errors.iterator().each((key, error) => {
+                hasHardErrors = true;
                 log.error({
                     title: `Erreur REDUCE ${key}`,
                     details: error
@@ -397,6 +403,27 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
 
                 return true;
             });
+
+            // Statut visible sur customrecord_das2, pour que l'utilisateur sache que l'export est terminé
+            // (et avec quel résultat) sans avoir à consulter les logs.
+            if (dasRecordId) {
+                let status;
+                if (filesCreated === 0) {
+                    status = hasHardErrors ? 'Échec' : 'Terminé - aucun fichier généré';
+                }
+                else if (hasHardErrors || validationErrors.length) {
+                    status = 'Terminé avec avertissements';
+                }
+                else {
+                    status = 'Terminé';
+                }
+
+                record.submitFields({
+                    type: 'customrecord_das2',
+                    id: dasRecordId,
+                    values: { custrecord_das2_status: status }
+                });
+            }
         }
 
         /**

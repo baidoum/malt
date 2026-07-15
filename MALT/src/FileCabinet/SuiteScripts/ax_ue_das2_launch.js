@@ -40,6 +40,10 @@ define(['N/log', 'N/record', 'N/task'],
             const dateFrom = newRecord.getValue({ fieldId: 'custrecord_das2_date_from' });
             const dateTo = newRecord.getValue({ fieldId: 'custrecord_das2_date_to' });
 
+            // Statut visible sur l'enregistrement pour que l'utilisateur sache que l'export tourne,
+            // sans avoir à consulter les logs. ax_mp_das2_export.js le passe à "Terminé"/"Échec" à la fin.
+            let status = 'En cours';
+
             try {
                 task.create({
                     taskType: task.TaskType.MAP_REDUCE,
@@ -53,6 +57,7 @@ define(['N/log', 'N/record', 'N/task'],
                 }).submit();
             }
             catch (e) {
+                status = 'Échec du lancement';
                 log.error({
                     title: 'Impossible de lancer l\'export DAS2',
                     details: e
@@ -64,7 +69,10 @@ define(['N/log', 'N/record', 'N/task'],
                 record.submitFields({
                     type: newRecord.type,
                     id: newRecord.id,
-                    values: { custrecord_das2_launch: false }
+                    values: {
+                        custrecord_das2_launch: false,
+                        custrecord_das2_status: status
+                    }
                 });
             }
         }
