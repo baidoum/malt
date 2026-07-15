@@ -46,7 +46,7 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
                 const savedSearch = search.load({
                     id: 'customsearch_ax_das2'
                 });
-                log.audit({ title: 'DIAG getInputData 1', details: `search.load OK. Filtres actuels : ${describeFilters(savedSearch.filters)}` });
+                log.audit({ title: 'DIAG getInputData 1', details: `Filtres avant modif : ${JSON.stringify(savedSearch.filterExpression)}` });
 
                 // Si l'export a été lancé depuis customrecord_das2, restreindre la recherche à la période demandée
                 // en remplaçant le filtre "closedate" par défaut de la recherche sauvegardée.
@@ -61,8 +61,11 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
                 });
 
                 if (dateFrom && dateTo) {
-                    const endOfDay = new Date(dateTo.getTime());
-                    endOfDay.setHours(23, 59, 59, 999);
+                    // On reproduit exactement le format "JJ/MM/AAAA hh:mm am/pm" du filtre déjà en place dans la
+                    // recherche sauvegardée (ex. "31/12/2025 11:59 pm"), plutôt que de transmettre des objets Date
+                    // et laisser NetSuite les convertir (source probable de l'échec précédent).
+                    const dateFromStr = formatSearchDateTime(dateFrom, '12:00 am');
+                    const dateToStr = formatSearchDateTime(dateTo, '11:59 pm');
 
                     // savedSearch.filters retourne une copie à chaque accès : il faut la récupérer une fois,
                     // la modifier, puis la réaffecter pour que le changement soit pris en compte.
@@ -70,10 +73,10 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
                     filters.push(search.createFilter({
                         name: 'closedate',
                         operator: search.Operator.WITHIN,
-                        values: [dateFrom, endOfDay]
+                        values: [dateFromStr, dateToStr]
                     }));
                     savedSearch.filters = filters;
-                    log.audit({ title: 'DIAG getInputData 3', details: `Filtre closedate appliqué. Filtres finaux : ${describeFilters(savedSearch.filters)}` });
+                    log.audit({ title: 'DIAG getInputData 3', details: `Filtres après modif : ${JSON.stringify(savedSearch.filterExpression)}` });
                 }
 
                 // Exécuter la recherche nous-mêmes avant de la retourner : si elle est mal formée
@@ -94,11 +97,18 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
         }
 
         /**
-         * @param {import('N/search').Filter[]} filters
+         * Formate un objet Date au format "JJ/MM/AAAA hh:mm am/pm" attendu par les filtres de recherche
+         * de ce compte (le même format que celui déjà utilisé par le filtre "closedate" d'origine).
+         *
+         * @param {Date} date
+         * @param {string} time
          * @returns {string}
          */
-        const describeFilters = (filters) => {
-            return filters.map(f => `${f.name} ${f.operator} ${JSON.stringify(f.values)}`).join(' | ');
+        const formatSearchDateTime = (date, time) => {
+            const dd = String(date.getDate()).padStart(2, '0');
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const yyyy = date.getFullYear();
+            return `${dd}/${mm}/${yyyy} ${time}`;
         }
 
         /**
