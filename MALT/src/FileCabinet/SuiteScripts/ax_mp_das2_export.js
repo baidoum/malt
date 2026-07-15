@@ -56,12 +56,15 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
                     const endOfDay = new Date(dateTo);
                     endOfDay.setHours(23, 59, 59, 999);
 
-                    savedSearch.filters = savedSearch.filters.filter(f => f.name !== 'closedate');
-                    savedSearch.filters.push(search.createFilter({
+                    // savedSearch.filters retourne une copie à chaque accès : il faut la récupérer une fois,
+                    // la modifier, puis la réaffecter pour que le changement soit pris en compte.
+                    const filters = savedSearch.filters.filter(f => f.name !== 'closedate');
+                    filters.push(search.createFilter({
                         name: 'closedate',
                         operator: search.Operator.WITHIN,
                         values: [dateFrom, endOfDay]
                     }));
+                    savedSearch.filters = filters;
                 }
 
                 return savedSearch;
