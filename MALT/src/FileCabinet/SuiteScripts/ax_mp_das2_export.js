@@ -16,7 +16,7 @@
 const LOG_WRITER_SCRIPT_ID = 'customscript_ax_ss_das2_logs'; // TODO: à adapter si l'id diffère au déploiement.
 const LOG_WRITER_DEPLOYMENT_ID = 'customdeploy_ax_ss_das2_logs'; // TODO: remplacer par l'id réel une fois le script déployé.
 
-define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/task', './libs/ax_lib_fileHeaders', './libs/ax_lib_fileFeeLine', './libs/ax_lib_fileFooters', './libs/ax_lib_subsidiaryFormatter', './libs/ax_lib_vendorFormatter', './libs/ax_lib_utils', './libs/ax_lib_errorCollector'],
+define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/task', './ax_lib_fileHeaders', './ax_lib_fileFeeLine', './ax_lib_fileFooters', './ax_lib_subsidiaryFormatter', './ax_lib_vendorFormatter', './ax_lib_utils', './ax_lib_errorCollector'],
     /**
      * @param {typeof import('N/error')} error
      * @param {typeof import('N/file')} file
@@ -171,8 +171,24 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
          * @since 2015.2
          */
         const reduce = (reduceContext) => {
-            //log.debug('reduce', reduceContext);
+            try {
+                reduceImpl(reduceContext);
+            }
+            catch (e) {
+                // Titre volontairement court et fixe : NetSuite tronque les titres longs dans la liste des
+                // logs, ce qui rendait le détail illisible quand la clé/les valeurs y étaient interpolées.
+                log.error({
+                    title: 'reduce a échoué',
+                    details: `key=${JSON.stringify(reduceContext.key)}\nvalues=${JSON.stringify(reduceContext.values)}\n${e.name}: ${e.message}\n${e.stack || ''}`
+                });
+                throw e;
+            }
+        }
 
+        /**
+         * @param {import('N/types').EntryPoints.MapReduce.reduceContext} reduceContext
+         */
+        const reduceImpl = (reduceContext) => {
             // 1. Récupérer les paramètres du script
             const scriptObj = runtime.getCurrentScript();
             const startUnitsAvailable = scriptObj.getRemainingUsage();
@@ -184,7 +200,25 @@ define(['N/error', 'N/file', 'N/log', 'N/record', 'N/runtime', 'N/search', 'N/ta
             const objects = reduceContext.values;
             const /** @type {Record<string, any[]>} */ subsidiaries = {};
             for (const jsonData of objects) {
-                const raw = JSON.parse(jsonData);
+                if (!jsonData || jsonData === 'undefined') {
+                    log.error({
+                        title: 'Entrée vide ignorée',
+                        details: `key=${JSON.stringify(reduceContext.key)} - valeur ignorée : ${JSON.stringify(jsonData)}`
+                    });
+                    continue;
+                }
+
+                let raw;
+                try {
+                    raw = JSON.parse(jsonData);
+                }
+                catch (e) {
+                    log.error({
+                        title: 'Entrée illisible ignorée',
+                        details: `key=${JSON.stringify(reduceContext.key)} - jsonData=${JSON.stringify(jsonData)} - ${e.name}: ${e.message}`
+                    });
+                    continue;
+                }
 
                 // 2.1. Récupérer l'année fiscale.
                 if (!fiscalYear) {
